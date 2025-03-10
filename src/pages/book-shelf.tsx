@@ -87,16 +87,10 @@ export function BookShelf() {
   }
   
   // Calculate book height with some randomness
-  const calculateBookHeight = (bookId: string, shelfIndex: number) => {
+  const calculateBookHeight = (bookId: string) => {
     // Use the book ID to generate a consistent random value
     const randomFactor = getConsistentRandomValue(bookId, 0.9, 1.1);
-    
-    // Calculate height as percentage of shelf height, but ensure it doesn't exceed shelf height
-    // For the top shelf, books can be up to 95% of shelf height
-    // For middle and bottom shelves, books can be up to 90% of shelf height
-    const maxHeightPercent = shelfIndex === 0 ? 95 : 90;
-    
-    return `${Math.min(Math.round(maxHeightPercent * randomFactor), maxHeightPercent)}%`;
+    return `${Math.round(100 * randomFactor)}%`;
   }
   
   // Generate a consistent random value based on book ID
@@ -355,7 +349,6 @@ export function BookShelf() {
           {/* Books on shelves */}
           {filteredBooks.length > 0 && (
             <>
-              {/* Top shelf */}
               <div className="absolute top-0 left-0 right-0 flex gap-1 overflow-x-auto h-1/3 p-2">
                 {filteredBooks.slice(0, Math.min(15, filteredBooks.length)).map((book) => (
                   <div 
@@ -364,16 +357,13 @@ export function BookShelf() {
                     onClick={() => handleEditBook(book)}
                     style={{ 
                       width: `${calculateBookWidth(book.title, book.id)}px`, 
-                      height: calculateBookHeight(book.id, 0),
+                      height: calculateBookHeight(book.id),
                       backgroundColor: getBookColor(book),
                       backgroundImage: getBookPattern(book),
                       borderRadius: '0 3px 3px 0',
                       position: 'relative',
                       boxShadow: '1px 1px 3px rgba(0,0,0,0.3)',
-                      // Position at the bottom of the shelf container
-                      position: 'absolute',
-                      bottom: '2px', // Align to the shelf
-                      left: `${10 + 65 * Math.floor(getConsistentRandomValue(book.id, 0, 15))}px`,
+                      marginTop: `${getConsistentRandomValue(book.id, 0, 10)}px`
                     }}
                   >
                     {book.favorite && (
@@ -389,8 +379,10 @@ export function BookShelf() {
                       <div 
                         className="text-white font-bold text-center overflow-hidden"
                         style={{ 
+                          // Increased font size from 12px to 16px
                           fontSize: '16px',
                           lineHeight: '1.2',
+                          // Enhanced text shadow for better readability
                           textShadow: '0px 0px 3px rgba(0,0,0,0.9), 0px 0px 6px rgba(0,0,0,0.5)',
                           maxHeight: '100%',
                           width: '100%',
@@ -399,6 +391,7 @@ export function BookShelf() {
                           WebkitBoxOrient: 'vertical',
                           overflow: 'hidden',
                           textOverflow: 'ellipsis',
+                          // Added letter spacing for better readability
                           letterSpacing: '0.5px',
                         }}
                       >
@@ -409,24 +402,21 @@ export function BookShelf() {
                 ))}
               </div>
               
-              {/* Middle shelf */}
               <div className="absolute top-1/3 left-0 right-0 flex gap-1 overflow-x-auto h-1/3 p-2">
-                {filteredBooks.slice(15, Math.min(30, filteredBooks.length)).map((book, index) => (
+                {filteredBooks.slice(15, Math.min(30, filteredBooks.length)).map((book) => (
                   <div 
                     key={`shelf2-${book.id}`} 
                     className="flex-shrink-0 cursor-pointer group relative"
                     onClick={() => handleEditBook(book)}
                     style={{ 
                       width: `${calculateBookWidth(book.title, book.id)}px`, 
-                      height: calculateBookHeight(book.id, 1),
+                      height: calculateBookHeight(book.id),
                       backgroundColor: getBookColor(book),
                       backgroundImage: getBookPattern(book),
                       borderRadius: '0 3px 3px 0',
+                      position: 'relative',
                       boxShadow: '1px 1px 3px rgba(0,0,0,0.3)',
-                      // Position at the bottom of the shelf container
-                      position: 'absolute',
-                      bottom: '2px', // Align to the shelf
-                      left: `${10 + 65 * Math.floor(getConsistentRandomValue(book.id + 'pos', 0, 15))}px`,
+                      marginTop: `${getConsistentRandomValue(book.id, 0, 10)}px`
                     }}
                   >
                     {book.favorite && (
@@ -442,8 +432,10 @@ export function BookShelf() {
                       <div 
                         className="text-white font-bold text-center overflow-hidden"
                         style={{ 
+                          // Increased font size from 12px to 16px
                           fontSize: '16px',
                           lineHeight: '1.2',
+                          // Enhanced text shadow for better readability
                           textShadow: '0px 0px 3px rgba(0,0,0,0.9), 0px 0px 6px rgba(0,0,0,0.5)',
                           maxHeight: '100%',
                           width: '100%',
@@ -452,6 +444,7 @@ export function BookShelf() {
                           WebkitBoxOrient: 'vertical',
                           overflow: 'hidden',
                           textOverflow: 'ellipsis',
+                          // Added letter spacing for better readability
                           letterSpacing: '0.5px',
                         }}
                       >
@@ -462,24 +455,21 @@ export function BookShelf() {
                 ))}
               </div>
               
-              {/* Bottom shelf */}
               <div className="absolute top-2/3 left-0 right-0 flex gap-1 overflow-x-auto h-1/3 p-2">
-                {filteredBooks.slice(30, Math.min(45, filteredBooks.length)).map((book, index) => (
+                {filteredBooks.slice(30, Math.min(45, filteredBooks.length)).map((book) => (
                   <div 
                     key={`shelf3-${book.id}`} 
                     className="flex-shrink-0 cursor-pointer group relative"
                     onClick={() => handleEditBook(book)}
                     style={{ 
                       width: `${calculateBookWidth(book.title, book.id)}px`, 
-                      height: calculateBookHeight(book.id, 2),
+                      height: calculateBookHeight(book.id),
                       backgroundColor: getBookColor(book),
                       backgroundImage: getBookPattern(book),
                       borderRadius: '0 3px 3px 0',
+                      position: 'relative',
                       boxShadow: '1px 1px 3px rgba(0,0,0,0.3)',
-                      // Position at the bottom of the shelf container
-                      position: 'absolute',
-                      bottom: '2px', // Align to the shelf
-                      left: `${10 + 65 * Math.floor(getConsistentRandomValue(book.id + 'shelf3', 0, 15))}px`,
+                      marginTop: `${getConsistentRandomValue(book.id, 0, 10)}px`
                     }}
                   >
                     {book.favorite && (
@@ -495,8 +485,10 @@ export function BookShelf() {
                       <div 
                         className="text-white font-bold text-center overflow-hidden"
                         style={{ 
+                          // Increased font size from 12px to 16px
                           fontSize: '16px',
                           lineHeight: '1.2',
+                          // Enhanced text shadow for better readability
                           textShadow: '0px 0px 3px rgba(0,0,0,0.9), 0px 0px 6px rgba(0,0,0,0.5)',
                           maxHeight: '100%',
                           width: '100%',
@@ -505,6 +497,7 @@ export function BookShelf() {
                           WebkitBoxOrient: 'vertical',
                           overflow: 'hidden',
                           textOverflow: 'ellipsis',
+                          // Added letter spacing for better readability
                           letterSpacing: '0.5px',
                         }}
                       >

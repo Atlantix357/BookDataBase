@@ -1,213 +1,224 @@
 import { Book, FilterPreset, ColumnPreset } from '../types/book';
 
-// In-memory storage for books (in a real app, this would be a database)
-let books: Book[] = [];
-let filterPresets: FilterPreset[] = [];
-let columnPresets: ColumnPreset[] = [];
+// API base URL
+const API_BASE_URL = 'http://192.168.50.25:3001';
 
 // Get all books
 export const getAllBooks = async (): Promise<Book[]> => {
-  return [...books]; // Return a copy to prevent accidental mutations
+  try {
+    const response = await fetch(`${API_BASE_URL}/books`);
+    if (!response.ok) {
+      throw new Error('Failed to fetch books');
+    }
+    return await response.json();
+  } catch (error) {
+    console.error('Error fetching books:', error);
+    return [];
+  }
 };
 
 // Get a book by ID
 export const getBookById = async (id: string): Promise<Book | undefined> => {
-  return books.find(book => book.id === id);
+  try {
+    const response = await fetch(`${API_BASE_URL}/books/${id}`);
+    if (!response.ok) {
+      throw new Error('Failed to fetch book');
+    }
+    return await response.json();
+  } catch (error) {
+    console.error(`Error fetching book ${id}:`, error);
+    return undefined;
+  }
 };
 
 // Add a new book
-export const addBook = async (book: Omit<Book, 'id' | 'dateAdded'>): Promise<Book> => {
-  const newBook: Book = {
-    ...book,
-    id: Date.now().toString(), // Generate a unique ID
-    dateAdded: new Date().toISOString().split('T')[0], // Current date in YYYY-MM-DD format
-  };
-  
-  // Check if book with same title and author already exists
-  const exists = books.some(b => 
-    b.title.toLowerCase() === newBook.title.toLowerCase() && 
-    b.author.toLowerCase() === newBook.author.toLowerCase()
-  );
-  
-  if (!exists) {
-    books.push(newBook);
+export const addBook = async (bookData: FormData): Promise<Book> => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/books`, {
+      method: 'POST',
+      body: bookData,
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to add book');
+    }
+    
+    return await response.json();
+  } catch (error) {
+    console.error('Error adding book:', error);
+    throw error;
   }
-  
-  return newBook;
 };
 
 // Update a book
-export const updateBook = async (id: string, updates: Partial<Book>): Promise<Book | undefined> => {
-  const index = books.findIndex(book => book.id === id);
-  if (index !== -1) {
-    books[index] = { ...books[index], ...updates };
-    return books[index];
+export const updateBook = async (id: string, bookData: FormData): Promise<Book> => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/books/${id}`, {
+      method: 'PATCH',
+      body: bookData,
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to update book');
+    }
+    
+    return await response.json();
+  } catch (error) {
+    console.error(`Error updating book ${id}:`, error);
+    throw error;
   }
-  return undefined;
 };
 
 // Delete a book
 export const deleteBook = async (id: string): Promise<boolean> => {
-  const index = books.findIndex(book => book.id === id);
-  if (index !== -1) {
-    books.splice(index, 1);
-    return true;
+  try {
+    const response = await fetch(`${API_BASE_URL}/books/${id}`, {
+      method: 'DELETE',
+    });
+    
+    return response.ok;
+  } catch (error) {
+    console.error(`Error deleting book ${id}:`, error);
+    return false;
   }
-  return false;
+};
+
+// Export books to CSV
+export const exportBooksToCSV = async (): Promise<string> => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/export`);
+    
+    if (!response.ok) {
+      throw new Error('Failed to export books');
+    }
+    
+    return await response.text();
+  } catch (error) {
+    console.error('Error exporting books to CSV:', error);
+    throw error;
+  }
 };
 
 // Import books from CSV
-export const importBooksFromCSV = async (csvData: string): Promise<Book[]> => {
+export const importBooksFromCSV = async (csvContent: string): Promise<Book[]> => {
   try {
-    const lines = csvData.split('\n');
-    const headers = lines[0].split(',');
-    
-    const importedBooks: Book[] = [];
-    
-    for (let i = 1; i < lines.length; i++) {
-      if (!lines[i].trim()) continue;
-      
-      const values = lines[i].split(',');
-      const book: any = {};
-      
-      headers.forEach((header, index) => {
-        const value = values[index]?.trim();
-        if (value) {
-          // Handle special fields
-          if (header === 'favorite') {
-            book[header] = value.toLowerCase() === 'true';
-          } else if (header === 'rating') {
-            book[header] = parseFloat(value);
-          } else {
-            book[header] = value;
-          }
-        }
-      });
-      
-      // Ensure required fields
-      if (book.title && book.author && book.readStatus) {
-        book.id = book.id || Date.now().toString() + i;
-        book.dateAdded = book.dateAdded || new Date().toISOString().split('T')[0];
-        book.favorite = book.favorite || false;
-        
-        // Check if book already exists
-        const exists = books.some(existingBook => 
-          existingBook.title.toLowerCase() === book.title.toLowerCase() && 
-          existingBook.author.toLowerCase() === book.author.toLowerCase()
-        );
-        
-        if (!exists) {
-          importedBooks.push(book as Book);
-          books.push(book as Book);
-        }
-      }
-    }
-    
-    return importedBooks;
-  } catch (error) {
-    console.error('Error importing books from CSV:', error);
-    throw new Error('Failed to import books from CSV');
-  }
-};
-
-// Export books to CSV format
-export const exportBooksToCSV = async (): Promise<string> => {
-  try {
-    const headers = [
-      'id', 'title', 'author', 'cover', 'publisher', 'publishedDate', 
-      'category', 'language', 'bookType', 'readStatus', 'dateRead', 
-      'rating', 'favorite', 'notes', 'dateAdded'
-    ];
-    
-    let csv = headers.join(',') + '\n';
-    
-    books.forEach(book => {
-      const row = headers.map(header => {
-        const value = (book as any)[header];
-        
-        if (value === undefined || value === null) {
-          return '';
-        }
-        
-        if (typeof value === 'string' && value.includes(',')) {
-          return `"${value}"`;
-        }
-        
-        return value;
-      });
-      
-      csv += row.join(',') + '\n';
+    const response = await fetch(`${API_BASE_URL}/import`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'text/csv',
+      },
+      body: csvContent,
     });
     
-    return csv;
+    if (!response.ok) {
+      throw new Error('Failed to import books from CSV');
+    }
+    
+    return await response.json();
   } catch (error) {
-    console.error('Error exporting books to CSV:', error);
-    throw new Error('Failed to export books to CSV');
+    console.error('Error importing books from CSV:', error);
+    throw error;
   }
 };
 
 // Filter Presets
 export const getFilterPresets = async (): Promise<FilterPreset[]> => {
-  return [...filterPresets]; // Return a copy to prevent accidental mutations
+  try {
+    const response = await fetch(`${API_BASE_URL}/filter-presets`);
+    
+    if (!response.ok) {
+      throw new Error('Failed to fetch filter presets');
+    }
+    
+    return await response.json();
+  } catch (error) {
+    console.error('Error fetching filter presets:', error);
+    return [];
+  }
 };
 
 export const saveFilterPreset = async (preset: Omit<FilterPreset, 'id'>): Promise<FilterPreset> => {
-  const newPreset: FilterPreset = {
-    ...preset,
-    id: Date.now().toString(),
-  };
-  
-  // Check if preset with same name already exists
-  const exists = filterPresets.some(p => 
-    p.name.toLowerCase() === newPreset.name.toLowerCase()
-  );
-  
-  if (!exists) {
-    filterPresets.push(newPreset);
+  try {
+    const response = await fetch(`${API_BASE_URL}/filter-presets`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(preset),
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to save filter preset');
+    }
+    
+    return await response.json();
+  } catch (error) {
+    console.error('Error saving filter preset:', error);
+    throw error;
   }
-  
-  return newPreset;
 };
 
 export const deleteFilterPreset = async (id: string): Promise<boolean> => {
-  const index = filterPresets.findIndex(preset => preset.id === id);
-  if (index !== -1) {
-    filterPresets.splice(index, 1);
-    return true;
+  try {
+    const response = await fetch(`${API_BASE_URL}/filter-presets/${id}`, {
+      method: 'DELETE',
+    });
+    
+    return response.ok;
+  } catch (error) {
+    console.error(`Error deleting filter preset ${id}:`, error);
+    return false;
   }
-  return false;
 };
 
 // Column Presets
 export const getColumnPresets = async (): Promise<ColumnPreset[]> => {
-  return [...columnPresets]; // Return a copy to prevent accidental mutations
+  try {
+    const response = await fetch(`${API_BASE_URL}/column-presets`);
+    
+    if (!response.ok) {
+      throw new Error('Failed to fetch column presets');
+    }
+    
+    return await response.json();
+  } catch (error) {
+    console.error('Error fetching column presets:', error);
+    return [];
+  }
 };
 
 export const saveColumnPreset = async (preset: Omit<ColumnPreset, 'id'>): Promise<ColumnPreset> => {
-  const newPreset: ColumnPreset = {
-    ...preset,
-    id: Date.now().toString(),
-  };
-  
-  // Check if preset with same name already exists
-  const exists = columnPresets.some(p => 
-    p.name.toLowerCase() === newPreset.name.toLowerCase()
-  );
-  
-  if (!exists) {
-    columnPresets.push(newPreset);
+  try {
+    const response = await fetch(`${API_BASE_URL}/column-presets`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(preset),
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to save column preset');
+    }
+    
+    return await response.json();
+  } catch (error) {
+    console.error('Error saving column preset:', error);
+    throw error;
   }
-  
-  return newPreset;
 };
 
 export const deleteColumnPreset = async (id: string): Promise<boolean> => {
-  const index = columnPresets.findIndex(preset => preset.id === id);
-  if (index !== -1) {
-    columnPresets.splice(index, 1);
-    return true;
+  try {
+    const response = await fetch(`${API_BASE_URL}/column-presets/${id}`, {
+      method: 'DELETE',
+    });
+    
+    return response.ok;
+  } catch (error) {
+    console.error(`Error deleting column preset ${id}:`, error);
+    return false;
   }
-  return false;
 };
 
 // Backup settings
@@ -218,28 +229,105 @@ interface BackupSettings {
   lastBackup?: string;
 }
 
-let backupSettings: BackupSettings = {
-  enabled: false,
-  frequency: 'weekly',
-  oneDrivePath: '',
-};
-
 export const getBackupSettings = async (): Promise<BackupSettings> => {
-  return backupSettings;
+  try {
+    const response = await fetch(`${API_BASE_URL}/backup-settings`);
+    
+    if (!response.ok) {
+      throw new Error('Failed to fetch backup settings');
+    }
+    
+    return await response.json();
+  } catch (error) {
+    console.error('Error fetching backup settings:', error);
+    return {
+      enabled: false,
+      frequency: 'weekly',
+      oneDrivePath: '',
+    };
+  }
 };
 
 export const saveBackupSettings = async (settings: BackupSettings): Promise<BackupSettings> => {
-  backupSettings = settings;
-  return backupSettings;
+  try {
+    const response = await fetch(`${API_BASE_URL}/backup-settings`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(settings),
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to save backup settings');
+    }
+    
+    return await response.json();
+  } catch (error) {
+    console.error('Error saving backup settings:', error);
+    throw error;
+  }
 };
 
 export const performBackup = async (): Promise<boolean> => {
   try {
-    // In a real app, this would create a backup file and save it to the OneDrive path
-    backupSettings.lastBackup = new Date().toISOString();
-    return true;
+    const response = await fetch(`${API_BASE_URL}/backup`, {
+      method: 'POST',
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to perform backup');
+    }
+    
+    const result = await response.json();
+    return result.success;
   } catch (error) {
     console.error('Error performing backup:', error);
     return false;
+  }
+};
+
+// Server configuration
+interface ServerConfig {
+  host: string;
+  port: number;
+}
+
+export const getServerConfig = async (): Promise<ServerConfig> => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/server-config`);
+    
+    if (!response.ok) {
+      throw new Error('Failed to fetch server configuration');
+    }
+    
+    return await response.json();
+  } catch (error) {
+    console.error('Error fetching server configuration:', error);
+    return {
+      host: '192.168.50.25',
+      port: 3001,
+    };
+  }
+};
+
+export const saveServerConfig = async (config: ServerConfig): Promise<ServerConfig> => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/server-config`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(config),
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to save server configuration');
+    }
+    
+    return await response.json();
+  } catch (error) {
+    console.error('Error saving server configuration:', error);
+    throw error;
   }
 };

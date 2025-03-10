@@ -5,6 +5,7 @@ import path from 'path'
 import { fileURLToPath } from 'url'
 import multer from 'multer'
 import { stringify } from 'csv-stringify/sync'
+import { parse } from 'csv-parse/sync'
 import cron from 'node-cron'
 
 // Get __dirname equivalent in ES modules
@@ -49,9 +50,17 @@ const backupSettingsFile = path.join(dataDir, 'backup-settings.json')
 if (!fs.existsSync(backupSettingsFile)) {
   fs.writeFileSync(backupSettingsFile, JSON.stringify({
     frequency: 'daily',
-    path: '',
+    oneDrivePath: '',
     enabled: true,
     lastBackup: null
+  }))
+}
+
+const serverConfigFile = path.join(dataDir, 'server-config.json')
+if (!fs.existsSync(serverConfigFile)) {
+  fs.writeFileSync(serverConfigFile, JSON.stringify({
+    host: '192.168.50.25',
+    port: 3001
   }))
 }
 
@@ -79,13 +88,27 @@ const upload = multer({
   }
 })
 
+// Read server config
+function getServerConfig() {
+  try {
+    const data = fs.readFileSync(serverConfigFile, 'utf8')
+    return JSON.parse(data)
+  } catch (error) {
+    console.error('Error reading server config:', error)
+    return { host: '192.168.50.25', port: 3001 }
+  }
+}
+
 // Create Express app
 const app = express()
-const PORT = process.env.PORT || 3001
+const serverConfig = getServerConfig()
+const PORT = process.env.PORT || serverConfig.port || 3001
+const HOST = serverConfig.host || '192.168.50.25'
 
 // Middleware
 app.use(cors())
 app.use(express.json())
+app.use(express.text({ type: 'text/csv' }))
 app.use('/uploads', express.static(uploadsDir))
 
 // Helper functions
@@ -138,9 +161,9 @@ function createBackup() {
     console.log(`Backup created: ${backupFile}`)
     
     // Copy to OneDrive path if configured
-    if (backupSettings.path) {
+    if (backupSettings.oneDrivePath) {
       // In a real implementation, this would copy the file to the OneDrive path
-      console.log(`Would copy backup to OneDrive path: ${backupSettings.path}`)
+      console.log(`Would copy backup to OneDrive path: ${backupSettings.oneDrivePath}`)
     }
     
     return true
@@ -363,6 +386,65 @@ app.get('/export', (req, res) => {
   }
 })
 
+// Import books from CSV
+app.post('/import', (req, res) => {
+  try {
+    const csvContent = req.body
+    
+    // Parse CSV content
+    const records = parse(csvContent, {
+      columns: true,
+      skip_empty_lines: true
+    })
+    
+    // Read existing books
+    const books = readJsonFile(booksFile)
+    const existingIds = new Set(books.map(b => b.id))
+    
+    // Process imported books
+    const importedBooks = []
+    
+    for (const record of records) {
+      // Skip if book with same ID already exists
+      if (record.id && existingIds.has(parseInt(record.id))) {
+        continue
+      }
+      
+      // Generate new ID
+      const newId = books.length > 0 ? Math.max(...books.map(b => b.id)) + 1 : 1
+      
+      // Create new book object
+      const newBook = {
+        id: newId,
+        title: record.title || 'Untitled',
+        author: record.author || 'Unknown',
+        publisher: record.publisher || '',
+        published: record.published || '',
+        category: ['fiction', 'non-fiction'].includes(record.category) ? record.category : 'fiction',
+        language: ['en', 'ua'].includes(record.language) ? record.language : 'en',
+        bookType: ['paper', 'ebook', 'audiobook'].includes(record.bookType) ? record.bookType : 'paper',
+        status: ['read', 'unread', 'dnf'].includes(record.status) ? record.status : 'unread',
+        dateRead: record.dateRead || null,
+        rating: record.rating ? parseInt(record.rating) : null,
+        favorite: record.favorite === 'true',
+        cover: '',
+        comments: record.comments || ''
+      }
+      
+      books.push(newBook)
+      importedBooks.push(newBook)
+    }
+    
+    // Save updated books
+    writeJsonFile(booksFile, books)
+    
+    res.status(201).json(importedBooks)
+  } catch (error) {
+    console.error('Error importing books:', error)
+    res.status(500).json({ error: 'Failed to import books from CSV' })
+  }
+})
+
 // Filter presets routes
 app.get('/filter-presets', (req, res) => {
   try {
@@ -473,7 +555,7 @@ app.patch('/backup-settings', (req, res) => {
     
     // Update settings if provided
     if (req.body.frequency) settings.frequency = req.body.frequency
-    if ('path' in req.body) settings.path = req.body.path
+    if ('oneDrivePath' in req.body) settings.oneDrivePath = req.body.oneDrivePath
     if ('enabled' in req.body) settings.enabled = req.body.enabled
     
     writeJsonFile(backupSettingsFile, settings)
@@ -484,6 +566,35 @@ app.patch('/backup-settings', (req, res) => {
     res.json(settings)
   } catch (error) {
     res.status(500).json({ error: 'Failed to update backup settings' })
+  }
+})
+
+// Server configuration routes
+app.get('/server-config', (req, res) => {
+  try {
+    const config = readJsonFile(serverConfigFile)
+    res.json(config)
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to retrieve server configuration' })
+  }
+})
+
+app.patch('/server-config', (req, res) => {
+  try {
+    const config = readJsonFile(serverConfigFile)
+    
+    // Update config if provided
+    if (req.body.host) config.host = req.body.host
+    if (req.body.port) config.port = parseInt(req.body.port)
+    
+    writeJsonFile(serverConfigFile, config)
+    
+    res.json({
+      ...config,
+      message: 'Server configuration updated. Changes will take effect after server restart.'
+    })
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to update server configuration' })
   }
 })
 
@@ -503,7 +614,7 @@ app.post('/backup', (req, res) => {
 })
 
 // Start server
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`)
+app.listen(PORT, HOST, () => {
+  console.log(`Server running at http://${HOST}:${PORT}`)
   setupBackupCron()
 })
